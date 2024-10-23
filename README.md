@@ -41,7 +41,10 @@ python Denoising/download_data.py --data train --noise real
 ```bash
 python Denoising/generate_patches_sidd.py
 ```
-
+3. Give permissions to train.sh
+```bash
+chmod +x train.sh
+```
 ## Training
 
 1. Configure training parameters in `Denoising/Options/RealDenoising_DenoiseNet.yml`
