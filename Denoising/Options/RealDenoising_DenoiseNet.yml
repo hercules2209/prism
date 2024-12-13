@@ -5,7 +5,7 @@ DenoiseNet Training Configuration
 name: RealDenoising_DenoiseNet
 model_type: ImageCleanModel
 scale: 1
-num_gpu: 8
+num_gpu: 0
 manual_seed: 100
 is_train: true
 

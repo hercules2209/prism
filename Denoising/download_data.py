@@ -1,10 +1,3 @@
-## Restormer: Efficient Transformer for High-Resolution Image Restoration
-## Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, and Ming-Hsuan Yang
-## https://arxiv.org/abs/2111.09881
-
-## Download training and testing data for Image Denoising task
-
-
 import os
 # import gdown
 import shutil
@@ -108,4 +101,4 @@ for data in args.data.split('-'):
             shutil.unpack_archive('Datasets/test.zip', 'Datasets')
             os.remove('Datasets/test.zip')
 
-# print('Download completed successfully!')
+print('Download completed successfully!')

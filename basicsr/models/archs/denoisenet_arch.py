@@ -5,9 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from basicsr.utils.registry import ARCH_REGISTRY
 
-@ARCH_REGISTRY.register()
 class DenoiseNet(nn.Module):
     """Registered DenoiseNet architecture"""
     def __init__(self, channels):
@@ -213,18 +211,5 @@ class Decoder(nn.Module):
         for i, block in enumerate(self.blocks):
             x = block(x, features[-(i+2)])
         return self.activation(self.final_conv(x))
-
-class DenoiseNet(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.encoder = Encoder(channels)
-        self.middle_block = MiddleBlock(channels[-1])
-        self.decoder = Decoder(channels[::-1])
-        
-    def forward(self, x):
-        encoder_features = self.encoder(x)
-        middle_output = self.middle_block(encoder_features[-1])
-        clean_image = self.decoder([*encoder_features[:-1], middle_output])
-        return clean_image
 
 
