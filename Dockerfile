@@ -7,8 +7,11 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
+# Upgrade pip
+RUN pip install --upgrade pip
+
 # Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=100 --no-cache-dir -r requirements.txt
 
 # Command to run the application
 CMD ["python", "train.py", "--opt", "Options/RealDenoising_DenoiseNet.yml"]
