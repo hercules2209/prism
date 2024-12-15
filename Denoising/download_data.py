@@ -8,9 +8,12 @@ def download_file_from_google_drive(id, destination):
     URL = f"https://drive.google.com/uc?id={id}"
     response = requests.get(URL, stream=True)
     if response.status_code == 200:
-        with open(destination, "wb") as f:
-            for chunk in response.iter_content(1024):
-                f.write(chunk)
+        if 'Content-Type' in response.headers and 'application/zip' in response.headers['Content-Type']:
+            with open(destination, "wb") as f:
+                for chunk in response.iter_content(1024):
+                    f.write(chunk)
+        else:
+            print(f"Failed to download file with ID {id}. The file is not a zip file.")
     else:
         print(f"Failed to download file with ID {id}. Status code: {response.status_code}")
 
