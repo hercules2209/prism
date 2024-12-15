@@ -5,17 +5,28 @@ import zipfile
 import argparse
 
 def download_file_from_google_drive(id, destination):
-    URL = f"https://drive.google.com/uc?id={id}"
-    response = requests.get(URL, stream=True)
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+    response = session.get(URL, params={'id': id}, stream=True)
+    token = None
+    
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            token = value
+            break
+    
+    if token:
+        response = session.get(URL, params={'id': id, 'confirm': token}, stream=True)
+    
     if response.status_code == 200:
-        if 'Content-Type' in response.headers and 'application/zip' in response.headers['Content-Type']:
-            with open(destination, "wb") as f:
-                for chunk in response.iter_content(1024):
+        with open(destination, "wb") as f:
+            for chunk in response.iter_content(32768):
+                if chunk:
                     f.write(chunk)
-        else:
-            print(f"Failed to download file with ID {id}. The file is not a zip file.")
+        return True
     else:
         print(f"Failed to download file with ID {id}. Status code: {response.status_code}")
+        return False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', type=str, required=True, help='train, test or train-test')
