@@ -1,4 +1,6 @@
-torch>=1.13.0  # Replace with your specific version
-opencv-python>=4.5.5  # Replace with your specific version
-tensorboard>=2.10.1  # Replace with your specific version
-wandb>=0.12.21  # Replace with your specific version
+torch>=1.13.0  
+opencv-python>=4.5.5  
+tensorboard>=2.10.1  
+wandb>=0.12.21  
+gdown
+lmdb

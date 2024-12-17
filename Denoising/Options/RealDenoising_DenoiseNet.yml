@@ -1,6 +1,5 @@
-"""
-DenoiseNet Training Configuration
-"""
+# DenoiseNet Training Configuration
+
 # general settings
 name: RealDenoising_DenoiseNet
 model_type: ImageCleanModel
