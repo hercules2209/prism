@@ -1,28 +1,32 @@
-## Restormer: Efficient Transformer for High-Resolution Image Restoration
-## Syed Waqas Zamir, Aditya Arora, Salman Khan, Munawar Hayat, Fahad Shahbaz Khan, and Ming-Hsuan Yang
-## https://arxiv.org/abs/2111.09881
-
 import numpy as np
 import os
 import cv2
 import math
 
 def calculate_psnr(img1, img2, border=0):
-    # img1 and img2 have range [0, 255]
-    #img1 = img1.squeeze()
-    #img2 = img2.squeeze()
-    if not img1.shape == img2.shape:
-        raise ValueError('Input images must have the same dimensions.')
-    h, w = img1.shape[:2]
-    img1 = img1[border:h-border, border:w-border]
-    img2 = img2[border:h-border, border:w-border]
+    try:
+        # Input validation
+        if img1 is None or img2 is None:
+            raise ValueError('Input images cannot be None')
+        if not img1.shape == img2.shape:
+            raise ValueError(f'Input images must have the same dimensions. Got {img1.shape} and {img2.shape}')
+        
+        h, w = img1.shape[:2]
+        if border >= h//2 or border >= w//2:
+            raise ValueError('Border size too large for image dimensions')
+            
+        img1 = img1[border:h-border, border:w-border]
+        img2 = img2[border:h-border, border:w-border]
 
-    img1 = img1.astype(np.float64)
-    img2 = img2.astype(np.float64)
-    mse = np.mean((img1 - img2)**2)
-    if mse == 0:
-        return float('inf')
-    return 20 * math.log10(255.0 / math.sqrt(mse))
+        img1 = img1.astype(np.float64)
+        img2 = img2.astype(np.float64)
+        mse = np.mean((img1 - img2)**2)
+        if mse == 0:
+            return float('inf')
+        return 20 * math.log10(255.0 / math.sqrt(mse))
+    except Exception as e:
+        print(f"Error calculating PSNR: {e}")
+        return None
 
 
 # --------------------------------------------

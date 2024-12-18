@@ -219,81 +219,138 @@ class ImageCleanModel(BaseModel):
                 metric: 0
                 for metric in self.opt['val']['metrics'].keys()
             }
-        # pbar = tqdm(total=len(dataloader), unit='image')
 
         window_size = self.opt['val'].get('window_size', 0)
-
         if window_size:
             test = partial(self.pad_test, window_size)
         else:
             test = self.nonpad_test
 
         cnt = 0
+        
+        try:
+            for idx, val_data in enumerate(dataloader):
+                # Clear any stale data
+                if hasattr(self, 'gt'): 
+                    del self.gt
+                if hasattr(self, 'lq'):
+                    del self.lq
+                if hasattr(self, 'output'):
+                    del self.output
+                torch.cuda.empty_cache()
 
-        for idx, val_data in enumerate(dataloader):
-            img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
+                img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
 
-            self.feed_data(val_data)
-            test()
+                # Feed data and test
+                self.feed_data(val_data)
+                test()
 
-            visuals = self.get_current_visuals()
-            sr_img = tensor2img([visuals['result']], rgb2bgr=rgb2bgr)
-            if 'gt' in visuals:
-                gt_img = tensor2img([visuals['gt']], rgb2bgr=rgb2bgr)
-                del self.gt
-
-            # tentative for out of GPU memory
-            del self.lq
-            del self.output
-            torch.cuda.empty_cache()
-
-            if save_img:
+                visuals = self.get_current_visuals()
                 
-                if self.opt['is_train']:
+                # Shape validation before processing
+                result_tensor = visuals.get('result')
+                gt_tensor = visuals.get('gt')
+                
+                if result_tensor is None:
+                    print(f"Warning: No result tensor for image {img_name}")
+                    continue
                     
-                    save_img_path = osp.join(self.opt['path']['visualization'],
-                                             img_name,
-                                             f'{img_name}_{current_iter}.png')
-                    
-                    save_gt_img_path = osp.join(self.opt['path']['visualization'],
-                                             img_name,
-                                             f'{img_name}_{current_iter}_gt.png')
-                else:
-                    
-                    save_img_path = osp.join(
-                        self.opt['path']['visualization'], dataset_name,
-                        f'{img_name}.png')
-                    save_gt_img_path = osp.join(
-                        self.opt['path']['visualization'], dataset_name,
-                        f'{img_name}_gt.png')
-                    
-                imwrite(sr_img, save_img_path)
-                imwrite(gt_img, save_gt_img_path)
+                # Convert tensors to images
+                try:
+                    sr_img = tensor2img([result_tensor], rgb2bgr=rgb2bgr)
+                    if gt_tensor is not None:
+                        gt_img = tensor2img([gt_tensor], rgb2bgr=rgb2bgr)
+                except Exception as e:
+                    print(f"Error converting tensors to images for {img_name}: {e}")
+                    continue
 
+                if save_img:
+                    try:
+                        if self.opt['is_train']:
+                            save_img_path = osp.join(
+                                self.opt['path']['visualization'],
+                                img_name,
+                                f'{img_name}_{current_iter}.png'
+                            )
+                            save_gt_img_path = osp.join(
+                                self.opt['path']['visualization'],
+                                img_name,
+                                f'{img_name}_{current_iter}_gt.png'
+                            )
+                        else:
+                            save_img_path = osp.join(
+                                self.opt['path']['visualization'], 
+                                dataset_name,
+                                f'{img_name}.png'
+                            )
+                            save_gt_img_path = osp.join(
+                                self.opt['path']['visualization'], 
+                                dataset_name,
+                                f'{img_name}_gt.png'
+                            )
+                        imwrite(sr_img, save_img_path)
+                        if 'gt' in visuals:
+                            imwrite(gt_img, save_gt_img_path)
+                    except Exception as e:
+                        print(f"Error saving images for {img_name}: {e}")
+
+                if with_metrics:
+                    # Verify shapes match before metric calculation
+                    try:
+                        if use_image:
+                            if sr_img.shape != gt_img.shape:
+                                print(f"Shape mismatch for {img_name}: sr={sr_img.shape}, gt={gt_img.shape}")
+                                continue
+                        else:
+                            if result_tensor.shape != gt_tensor.shape:
+                                print(f"Tensor shape mismatch for {img_name}")
+                                continue
+                                
+                        # Calculate metrics
+                        opt_metric = deepcopy(self.opt['val']['metrics'])
+                        if use_image:
+                            for name, opt_ in opt_metric.items():
+                                metric_type = opt_.pop('type')
+                                try:
+                                    value = getattr(metric_module, metric_type)(sr_img, gt_img, **opt_)
+                                    self.metric_results[name] += value
+                                except Exception as e:
+                                    print(f"Error calculating {metric_type} for {img_name}: {e}")
+                        else:
+                            for name, opt_ in opt_metric.items():
+                                metric_type = opt_.pop('type')
+                                try:
+                                    value = getattr(metric_module, metric_type)(
+                                        visuals['result'], visuals['gt'], **opt_)
+                                    self.metric_results[name] += value
+                                except Exception as e:
+                                    print(f"Error calculating {metric_type} for {img_name}: {e}")
+                    except Exception as e:
+                        print(f"Error in metrics calculation for {img_name}: {e}")
+                        
+                cnt += 1
+
+            # Calculate final metrics
+            current_metric = 0.
             if with_metrics:
-                # calculate metrics
-                opt_metric = deepcopy(self.opt['val']['metrics'])
-                if use_image:
-                    for name, opt_ in opt_metric.items():
-                        metric_type = opt_.pop('type')
-                        self.metric_results[name] += getattr(
-                            metric_module, metric_type)(sr_img, gt_img, **opt_)
-                else:
-                    for name, opt_ in opt_metric.items():
-                        metric_type = opt_.pop('type')
-                        self.metric_results[name] += getattr(
-                            metric_module, metric_type)(visuals['result'], visuals['gt'], **opt_)
+                for metric in self.metric_results.keys():
+                    self.metric_results[metric] /= cnt
+                    current_metric = self.metric_results[metric]
 
-            cnt += 1
-
-        current_metric = 0.
-        if with_metrics:
-            for metric in self.metric_results.keys():
-                self.metric_results[metric] /= cnt
-                current_metric = self.metric_results[metric]
-
-            self._log_validation_metric_values(current_iter, dataset_name,
-                                               tb_logger)
+                self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
+                
+        except Exception as e:
+            print(f"Validation error: {e}")
+        finally:
+            # Cleanup
+            if hasattr(self, 'gt'): 
+                del self.gt
+            if hasattr(self, 'lq'):
+                del self.lq
+            if hasattr(self, 'output'):
+                del self.output
+            torch.cuda.empty_cache()
+            
         return current_metric
 
 

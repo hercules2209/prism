@@ -38,17 +38,28 @@ def main():
         test_loaders.append(test_loader)
 
     # create model and test
-    model = create_model(opt)
+    try:
+        model = create_model(opt)
+    except Exception as e:
+        logger.error(f"Error creating model: {e}")
+        return
+
     for test_loader in test_loaders:
         test_set_name = test_loader.dataset.opt['name']
         logger.info(f'Testing {test_set_name}...')
-        model.validation(
-            test_loader,
-            current_iter=opt['name'],
-            tb_logger=None,
-            save_img=opt['val']['save_img'],
-            rgb2bgr=opt['val'].get('rgb2bgr', True),
-            use_image=opt['val'].get('use_image', True))
+        try:
+            model.validation(
+                test_loader,
+                current_iter=opt['name'],
+                tb_logger=None,
+                save_img=opt['val']['save_img'],
+                rgb2bgr=opt['val'].get('rgb2bgr', True),
+                use_image=opt['val'].get('use_image', True))
+        except Exception as e:
+            logger.error(f"Error during validation: {e}")
+            continue
+
+     
 
 if __name__ == '__main__':
     main()

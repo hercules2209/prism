@@ -127,6 +127,19 @@ def create_train_val_dataloader(opt, logger):
     return train_loader, train_sampler, val_loader, total_epochs, total_iters
 
 
+def get_current_settings(current_iter, groups, mini_batch_sizes, mini_gt_sizes):
+    """Helper function to get current batch size and patch size"""
+    j = None
+    for i, group in enumerate(groups):
+        if current_iter <= group:
+            j = i
+            break
+    if j is None:  # If we've passed all groups
+        j = len(groups) - 1
+        
+    return mini_batch_sizes[j], mini_gt_sizes[j], j
+
+
 def main():
     # parse options, set distributed setting, set ramdom seed
     opt = parse_options(is_train=True)
@@ -237,29 +250,28 @@ def main():
             model.update_learning_rate(
                 current_iter, warmup_iter=opt['train'].get('warmup_iter', -1))
 
-            
             ### ------Progressive learning ---------------------
-            j = ((current_iter>groups) !=True).nonzero()[0]
-            if len(j) == 0:
-                bs_j = len(groups) - 1
-            else:
-                bs_j = j[0]
+            mini_batch_size, mini_gt_size, current_stage = get_current_settings(
+                current_iter, groups, mini_batch_sizes, mini_gt_sizes
+            )
 
-            mini_gt_size = mini_gt_sizes[bs_j]
-            mini_batch_size = mini_batch_sizes[bs_j]
-            
-            if logger_j[bs_j]:
-                logger.info('\n Updating Patch_Size to {} and Batch_Size to {} \n'.format(mini_gt_size, mini_batch_size*torch.cuda.device_count())) 
-                logger_j[bs_j] = False
+            # Log when switching stages
+            if logger_j[current_stage]:
+                logger.info('\n Updating Patch_Size to {} and Batch_Size to {} \n'.format(
+                    mini_gt_size, mini_batch_size * torch.cuda.device_count()
+                ))
+                logger_j[current_stage] = False
 
             lq = train_data['lq']
             gt = train_data['gt']
 
-            if mini_batch_size < batch_size:
+            # Apply batch size adjustment if needed
+            if mini_batch_size < batch_size and mini_batch_size > 0:
                 indices = random.sample(range(0, batch_size), k=mini_batch_size)
                 lq = lq[indices]
                 gt = gt[indices]
 
+            # Apply patch size adjustment if needed
             if mini_gt_size < gt_size:
                 x0 = int((gt_size - mini_gt_size) * random.random())
                 y0 = int((gt_size - mini_gt_size) * random.random())
@@ -267,6 +279,11 @@ def main():
                 y1 = y0 + mini_gt_size
                 lq = lq[:,:,x0:x1,y0:y1]
                 gt = gt[:,:,x0*scale:x1*scale,y0*scale:y1*scale]
+
+            # Add debug prints
+            if current_iter % 100 == 0:  # Print every 100 iterations to avoid spam
+                print(f"Stage: {current_stage}, Iter: {current_iter}, Batch size: {mini_batch_size}, Patch size: {mini_gt_size}")
+                print(f"LQ shape: {lq.shape}, GT shape: {gt.shape}")
             ###-------------------------------------------
 
             
