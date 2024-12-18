@@ -1,0 +1,3 @@
+# Remove the type field
+network_g:
+  channels: [64, 128, 256, 512]

@@ -4,7 +4,7 @@
 name: RealDenoising_DenoiseNet
 model_type: ImageCleanModel
 scale: 1
-num_gpu: 0
+num_gpu: 1
 manual_seed: 100
 is_train: true
 
@@ -22,14 +22,15 @@ datasets:
 
     # Progressive training settings
     use_shuffle: true
-    num_worker_per_gpu: 8
-    batch_size_per_gpu: 8
-    mini_batch_sizes: [8,5,4,2]              # Reduced stages for 100k iterations
+    num_worker_per_gpu: 4
+    batch_size_per_gpu: 16
+    mini_batch_sizes: [16,12,8,4]              # Reduced stages for 100k iterations
     iters: [40000,30000,20000,10000]         # Total 100k iterations
-    gt_size: 384   # Max patch size
-    gt_sizes: [128,192,256,384]              # Progressive patch sizes
+    gt_size: 512  # Max patch size
+    gt_sizes: [128,256,384,512]              # Progressive patch sizes
     dataset_enlarge_ratio: 1
-    prefetch_mode: ~
+    pin_memory: true
+    prefetch_mode: cuda
 
   val:
     name: ValSet
@@ -57,16 +58,14 @@ path:
 
 # training settings
 train:
-  total_iter: 100000
-  warmup_iter: -1  # no warm up
+  total_iter: 300000
+  warmup_iter: 1000  # small warm up
   use_grad_clip: true
-
-  # Cosine annealing scheduler
   scheduler:
     type: CosineAnnealingRestartCyclicLR
-    periods: [40000, 60000]           # Two cycles for 100k iterations
+    periods: [150000, 150000]
     restart_weights: [1,1]
-    eta_mins: [0.0003,0.000001]       # Same LR range as Restormer
+    eta_mins: [0.0003,0.000001]
   
   mixing_augs:
     mixup: true
@@ -89,8 +88,8 @@ train:
 # validation settings
 val:
   window_size: 8
-  val_freq: !!float 4e3
-  save_img: false
+  val_freq: !!float 5e3 # More frequent validation
+  save_img: false # Save validation images
   rgb2bgr: true    
   use_image: false  
   metrics:
@@ -102,7 +101,7 @@ val:
 # logging settings
 logger:
   print_freq: 100
-  save_checkpoint_freq: !!float 4e3
+  save_checkpoint_freq: !!float 5e3 # More frequent checkpoint saving
   use_tb_logger: true
   wandb:           
     project: ~
