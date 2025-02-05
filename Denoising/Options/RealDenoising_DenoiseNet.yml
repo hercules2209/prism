@@ -80,11 +80,10 @@ train:
   
   # losses
   pixel_opt:
-    type: PSNRLoss
+    type: L1Loss
     loss_weight: 1
     reduction: mean
-    toY: false  # Calculate PSNR on RGB channels
-
+    
 # validation settings
 val:
   window_size: 8
