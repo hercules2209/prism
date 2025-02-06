@@ -23,9 +23,9 @@ datasets:
     # Progressive training settings
     use_shuffle: true
     num_worker_per_gpu: 4
-    batch_size_per_gpu: 16
-    mini_batch_sizes: [16,12,8,4]              # Reduced stages for 100k iterations
-    iters: [40000,30000,20000,10000]         # Total 100k iterations
+    batch_size_per_gpu: 64
+    mini_batch_sizes: [64,64,64,64]              # Reduced stages for 100k iterations
+    iters: [120000,80000,60000,40000]         # Total 100k iterations
     gt_size: 512  # Max patch size
     gt_sizes: [128,256,384,512]              # Progressive patch sizes
     dataset_enlarge_ratio: 1
