@@ -9,10 +9,10 @@ parser.add_argument('--dataset', type=str, default='SIDD', help='all or SIDD or 
 parser.add_argument('--noise', type=str, required=True, help='real or gaussian')
 args = parser.parse_args()
 
-### Google drive IDs ######
-SIDD_train = '1UHjWZzLPGweA9ZczmV8lFSRcIxqiOVJw'      ## https://drive.google.com/file/d/1UHjWZzLPGweA9ZczmV8lFSRcIxqiOVJw/view?usp=sharing
-SIDD_val   = '1Fw6Ey1R-nCHN9WEpxv0MnMqxij-ECQYJ'      ## https://drive.google.com/file/d/1Fw6Ey1R-nCHN9WEpxv0MnMqxij-ECQYJ/view?usp=sharing
-SIDD_test  = '11vfqV-lqousZTuAit1Qkqghiv_taY0KZ'      ## https://drive.google.com/file/d/11vfqV-lqousZTuAit1Qkqghiv_taY0KZ/view?usp=sharing
+### Google drive IDs ######### Google drive IDs ######
+SIDD_train = '1gMPQERplZgtCILp_pYa9S73IMfmzJiOX'      ## https://drive.google.com/file/d/1gMPQERplZgtCILp_pYa9S73IMfmzJiOX/view?usp=sharing
+SIDD_val   = '1PT-gkTjaoB5RFAbM8tq2DAxJ3rdOXF7N'      ## https://drive.google.com/file/d/1PT-gkTjaoB5RFAbM8tq2DAxJ3rdOXF7N/view?usp=sharing
+SIDD_test  = '1Em6RzuItCo8aJj5hWDEj8Y2L8F9kRl3b'      ## https://drive.google.com/file/d/1Em6RzuItCo8aJj5hWDEj8Y2L8F9kRl3b/view?usp=sharing
 DND_test   = '1CYCDhaVxYYcXhSfEVDUwkvJDtGxeQ10G'      ## https://drive.google.com/file/d/1CYCDhaVxYYcXhSfEVDUwkvJDtGxeQ10G/view?usp=sharing
 
 BSD400    = '1idKFDkAHJGAFDn1OyXZxsTbOSBx9GS8N'       ## https://drive.google.com/file/d/1idKFDkAHJGAFDn1OyXZxsTbOSBx9GS8N/view?usp=sharing
