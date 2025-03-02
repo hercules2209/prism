@@ -22,12 +22,12 @@ datasets:
 
     # Progressive training settings
     use_shuffle: true
-    num_worker_per_gpu: 4
-    batch_size_per_gpu: 64
-    mini_batch_sizes: [64,64,64,64,32,32]              # Reduced stages for 200k iterations
-    iters: [60000,44000,32000,24000,24000,16000]         # Total 200k iterations
-    gt_size: 384  # Max patch size
-    gt_sizes: [128,160,192,256,320,384]              # Progressive patch sizes
+    num_worker_per_gpu: 3
+    batch_size_per_gpu: 3
+    mini_batch_sizes: [3]              # Reduced stages for 200k iterations
+    iters: [400000]         
+    gt_size: 256  # Max patch size
+    gt_sizes: [256]              # Progressive patch sizes
     dataset_enlarge_ratio: 1
     pin_memory: true
     prefetch_mode: cuda
@@ -44,6 +44,10 @@ datasets:
 network_g:
   type: DenoiseNet
   channels: [64, 128, 256, 512]  # Channel configuration for 4 encoder/decoder blocks
+  enc_blocks: [2, 2, 2, 2]  # Number of blocks per encoder stage
+  dec_blocks: [2, 2, 2, 2]  # Number of blocks per decoder stage
+  mid_blocks: 2  # Number of blocks in the middle
+
 
 # path
 path:
@@ -58,14 +62,13 @@ path:
 
 # training settings
 train:
-  total_iter: 200000
-  warmup_iter: 1000  # small warm up
+  total_iter: 400000
+  warmup_iter: -1
   use_grad_clip: true
   scheduler:
-    type: CosineAnnealingRestartCyclicLR
-    periods: [100000, 100000]
-    restart_weights: [1,1]
-    eta_mins: [0.0003,0.000001]
+    type: TrueCosineAnnealingLR
+    T_max: 400000
+    eta_min: !!float 1e-7
   
   mixing_augs:
     mixup: true
@@ -74,9 +77,9 @@ train:
 
   optim_g:
     type: AdamW
-    lr: !!float 3e-4
-    weight_decay: !!float 1e-4
-    betas: [0.9, 0.999]
+    lr: !!float 1e-3
+    weight_decay: 0.
+    betas: [0.9, 0.9]
   
   # losses
   pixel_opt:
@@ -87,8 +90,8 @@ train:
 # validation settings
 val:
   window_size: 8
-  val_freq: !!float 5e3 # More frequent validation
-  save_img: false # Save validation images
+  val_freq: !!float 5e3 
+  save_img: true # Save validation images
   rgb2bgr: true    
   use_image: false  
   metrics:
@@ -96,17 +99,21 @@ val:
       type: calculate_psnr
       crop_border: 0
       test_y_channel: false
+    ssim:
+      type: calculate_ssim  
+      crop_border: 0
+      test_y_channel: false
 
 # logging settings
 logger:
-  print_freq: 100
-  save_checkpoint_freq: !!float 5e3 # More frequent checkpoint saving
+  print_freq: 500
+  save_checkpoint_freq: !!float 5e3 # checkpoint saving
   use_tb_logger: true
   wandb:           
     project: ~
     resume_id: ~
 
 # dist training settings
-dist_params:
+dist_params:  
   backend: nccl
   port: 29500
