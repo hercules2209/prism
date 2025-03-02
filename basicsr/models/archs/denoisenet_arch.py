@@ -1,13 +1,10 @@
-"""
-DenoiseNet architecture registration for BasicSR
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class DenoiseNet(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, enc_blocks=[2, 2, 2, 2], dec_blocks=[2, 2, 2, 2], mid_blocks=2):
         super().__init__()
         # Initial feature extraction
         self.initial_conv = nn.Sequential(
@@ -17,9 +14,9 @@ class DenoiseNet(nn.Module):
         )
         
         # Main components
-        self.encoder = Encoder(channels)
-        self.middle_block = MiddleBlock(channels[-1])
-        self.decoder = Decoder(channels)
+        self.encoder = Encoder(channels, enc_blocks)
+        self.middle_block = MiddleBlock(channels[-1], num_blocks=mid_blocks)
+        self.decoder = Decoder(channels, dec_blocks)
     
     def forward(self, x):
         # Initial feature extraction
@@ -126,32 +123,48 @@ class EncoderBlock(nn.Module):
         self.ffn = FeedForwardNetwork(channels)
 
     def forward(self, x):
+        residual = x
         y = self.norm1(x)
         y = self.local_extractor(y)
         global_features = self.global_extractor(y)
         y = self.fusion(torch.cat([y, global_features], dim=1))
         y = self.gating(y)
+        y = residual + y  # First residual connection
+        
+        residual = y
         y = self.norm2(y)
         y = self.ffn(y)
-        return y
+        return residual + y  # Second residual connection
 
 class Encoder(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, enc_blocks):
         super().__init__()
-        self.blocks = nn.ModuleList([
-            EncoderBlock(channels[i]) for i in range(len(channels))
-        ])
-        self.downsample = nn.ModuleList([
-            nn.Conv2d(channels[i], channels[i+1], kernel_size=2, stride=2)
-            for i in range(len(channels)-1)
-        ])
+        self.stages = nn.ModuleList()
+        self.downsample = nn.ModuleList()
+        
+        # Create encoder stages with multiple blocks per stage
+        for i in range(len(channels)):
+            # Create a sequence of encoder blocks for this stage
+            blocks = nn.Sequential(*[
+                EncoderBlock(channels[i]) for _ in range(enc_blocks[i])
+            ])
+            self.stages.append(blocks)
+            
+            # Add downsampling except for the last stage
+            if i < len(channels) - 1:
+                self.downsample.append(
+                    nn.Conv2d(channels[i], channels[i+1], kernel_size=2, stride=2)
+                )
     
     def forward(self, x):
         features = []
-        for i, block in enumerate(self.blocks):
-            x = block(x)
+        for i, stage in enumerate(self.stages):
+            # Process through all blocks in this stage
+            x = stage(x)
             features.append(x)
-            if i < len(self.blocks) - 1:
+            
+            # Downsample if not the last stage
+            if i < len(self.stages) - 1:
                 x = self.downsample[i](x)
         return features
 
@@ -172,27 +185,38 @@ class MultiscaleFeatureExtractor(nn.Module):
         return self.fusion(torch.cat([y1, y2, y3, y4], dim=1))
 
 class MiddleBlock(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, num_blocks=2):
         super().__init__()
-        self.norm1 = nn.BatchNorm2d(channels)
-        self.local_extractor = EnhancedLocalFeatureExtractor(channels)
-        self.global_extractor = AdaptiveChannelAttention(channels)
-        self.multiscale_extractor = MultiscaleFeatureExtractor(channels)
-        self.fusion = FeatureFusion(channels * 3, channels)
-        self.gating = GatingMechanism(channels)
-        self.norm2 = nn.BatchNorm2d(channels)
-        self.ffn = FeedForwardNetwork(channels, expansion_factor=4)
+        # Create a sequence of middle blocks
+        self.blocks = nn.ModuleList()
+        for _ in range(num_blocks):
+            self.blocks.append(nn.ModuleDict({
+                'norm1': nn.BatchNorm2d(channels),
+                'local_extractor': EnhancedLocalFeatureExtractor(channels),
+                'global_extractor': AdaptiveChannelAttention(channels),
+                'multiscale_extractor': MultiscaleFeatureExtractor(channels),
+                'fusion': FeatureFusion(channels * 3, channels),
+                'gating': GatingMechanism(channels),
+                'norm2': nn.BatchNorm2d(channels),
+                'ffn': FeedForwardNetwork(channels, expansion_factor=4)
+            }))
 
     def forward(self, x):
-        y = self.norm1(x)
-        local_features = self.local_extractor(y)
-        global_features = self.global_extractor(y)
-        multiscale_features = self.multiscale_extractor(y)
-        y = self.fusion(torch.cat([local_features, global_features, multiscale_features], dim=1))
-        y = self.gating(y)
-        y = self.norm2(y)
-        y = self.ffn(y)
-        return y
+        for block in self.blocks:
+            residual = x
+            y = block['norm1'](x)
+            local_features = block['local_extractor'](y)
+            global_features = block['global_extractor'](y)
+            multiscale_features = block['multiscale_extractor'](y)
+            y = block['fusion'](torch.cat([local_features, global_features, multiscale_features], dim=1))
+            y = block['gating'](y)
+            y = residual + y  # First residual connection
+            
+            residual = y
+            y = block['norm2'](y)
+            y = block['ffn'](y)
+            x = residual + y  # Second residual connection
+        return x
 
 class DecoderBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -260,22 +284,43 @@ class DecoderBlock(nn.Module):
         
         return out
 
+class DecoderStage(nn.Module):
+    def __init__(self, in_channels, out_channels, num_blocks):
+        super().__init__()
+        self.initial_block = DecoderBlock(in_channels, out_channels)
+        
+        # Additional processing blocks
+        self.blocks = nn.ModuleList()
+        for _ in range(num_blocks - 1):  # -1 because we already have the initial block
+            self.blocks.append(EncoderBlock(out_channels))  # Reusing EncoderBlock for consistency
+    
+    def forward(self, x, skip):
+        # Initial decoder block with skip connection
+        x = self.initial_block(x, skip)
+        
+        # Additional processing blocks
+        for block in self.blocks:
+            x = block(x)
+            
+        return x
+
 class Decoder(nn.Module):
-    def __init__(self, channels):
+    def __init__(self, channels, dec_blocks):
         super().__init__()
         # channels is [64, 128, 256, 512]
         channels_rev = channels[::-1]  # [512, 256, 128, 64]
+        dec_blocks_rev = dec_blocks[::-1]  # Reverse to match channels
         
-        # Create decoder blocks
-        self.blocks = nn.ModuleList()
+        # Create decoder stages
+        self.stages = nn.ModuleList()
         for i in range(len(channels) - 1):
             in_ch = channels_rev[i]
-            out_ch = channels_rev[i + 1] if i < len(channels_rev) - 1 else 64
-            self.blocks.append(DecoderBlock(in_ch, out_ch))
+            out_ch = channels_rev[i + 1]
+            self.stages.append(DecoderStage(in_ch, out_ch, dec_blocks_rev[i]))
         
         # Final output convolution
         self.final_conv = nn.Sequential(
-            nn.Conv2d(64, 32, kernel_size=3, padding=1),
+            nn.Conv2d(channels[0], 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Conv2d(32, 3, kernel_size=3, padding=1),
@@ -290,10 +335,10 @@ class Decoder(nn.Module):
         # Reverse encoder features for skip connections
         encoder_features = encoder_features[::-1]
         
-        # Process through decoder blocks
-        for i, block in enumerate(self.blocks):
+        # Process through decoder stages
+        for i, stage in enumerate(self.stages):
             skip = encoder_features[i]
-            x = block(x, skip)
+            x = stage(x, skip)
         
         # Final convolution
         output = self.final_conv(x)
