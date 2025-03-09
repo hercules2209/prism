@@ -149,7 +149,7 @@ class BaseModel():
         """
         if isinstance(net, (DataParallel, DistributedDataParallel)):
             net_cls_str = (f'{net.__class__.__name__} - '
-                           f'{net.module.__class__.__name__}')
+                        f'{net.module.__class__.__name__}')
         else:
             net_cls_str = f'{net.__class__.__name__}'
 
@@ -160,6 +160,26 @@ class BaseModel():
         logger.info(
             f'Network: {net_cls_str}, with parameters: {net_params:,d}')
         logger.info(net_str)
+        
+        # Calculate MACs
+        try:
+            from ptflops import get_model_complexity_info
+            
+            input_shape = (3, 256, 256)  
+            
+            # Calculate MACs
+            macs, _ = get_model_complexity_info(
+                net, input_shape, as_strings=False, 
+                print_per_layer_stat=False, verbose=False
+            )
+            
+            gmacs = macs / 1e9
+            logger.info(f'Network MACs: {gmacs:.2f} GMACs for input size {input_shape}')
+        except ImportError:
+            logger.info('ptflops not installed, skipping MACs calculation. Install with: pip install ptflops')
+        except Exception as e:
+            logger.info(f'Error calculating MACs: {e}')
+
 
     def _set_lr(self, lr_groups_l):
         """Set learning rate for warmup.
