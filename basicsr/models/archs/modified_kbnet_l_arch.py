@@ -92,33 +92,7 @@ class FCAttention(nn.Module):
         )            
     def forward(self,x):
         B, C, H, W = x.shape
-        '''
-        #with patching
-        #N = self.patch_size
-        N = H//4
-        assert H % N == 0 and W % N == 0, "Image size must be divisible by patch size"
-        output = torch.zeros_like(x)  # Initialize output tensor
-        # Loop over patches
-        for i in range(0, H, N):
-            for j in range(0, W, N):
-                # Extract patch
-                patch = x[:, :, i:i+N, j:j+N]
-                fft_patch = torch.fft.fft2(patch, norm="ortho")
-                real, imag = fft_patch.real, fft_patch.imag
-                complex_feature = torch.cat([real, imag], dim=1)
-                
-                transformed_feature = self.complex_conv(complex_feature)
-                real_transformed, imag_transformed = torch.chunk(transformed_feature, 2, dim=1)
-                
-                real_attn = self.sca(self.gp(real_transformed))
-                imag_attn = self.sca(self.gp(imag_transformed))
-                real_new = real_transformed + real_transformed*real_attn
-                imag_new = imag_transformed + imag_transformed*imag_attn
-                fft_new = torch.complex(real_new, imag_new)
-                ifft_patch = torch.abs(torch.fft.ifft2(fft_new, norm="ortho"))
-                output[:, :, i:i+N, j:j+N] = ifft_patch        
-        '''
-        #without patching        
+
         fft_patch = torch.fft.fft2(x, norm="ortho")
         real, imag = fft_patch.real, fft_patch.imag
         complex_feature = torch.cat([real, imag], dim=1)
@@ -129,7 +103,6 @@ class FCAttention(nn.Module):
         real_new = real_transformed + real_transformed*real_attn
         imag_new = imag_transformed + imag_transformed*imag_attn
         fft_new = torch.complex(real_new, imag_new)
-        #ifft_patch = torch.fft.ifft2(fft_new, norm="ortho").real
         ifft_patch = torch.abs(torch.fft.ifft2(fft_new, norm="ortho"))
         output = ifft_patch
         return output
@@ -227,7 +200,6 @@ class ModifiedKBBlock_l(nn.Module):
         x = x + self.attn(self.norm1(x))
         x = x + self.ffn(self.norm2(x))
         return x
-
 
 
 class ModifiedKBNet_l(nn.Module):
